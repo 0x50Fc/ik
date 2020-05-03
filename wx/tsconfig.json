@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "module": "CommonJS",
+    "target": "ES5",
+    "allowJs": false,
+    "experimentalDecorators": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "alwaysStrict": true,
+    "inlineSourceMap": false,
+    "inlineSources": false,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": true,
+    "strict": true,
+    "removeComments": true,
+    "pretty": true,
+    "strictPropertyInitialization": true,
+    "typeRoots": [
+      "typings"
+    ]
+  },
+  "include": [
+    "./**/*.ts",
+    "../core/**/*.ts",
+    "/typings/wx/index.d.ts",
+    "/typings/index.d.ts",
+    "/typings/wx/lib.wx.api.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "miniprogram_dist",
+    "**/*.spec.ts"
+  ]
+}

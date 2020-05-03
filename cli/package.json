@@ -1,0 +1,36 @@
+{
+    "name": "ik-cli",
+    "version": "1.0.0",
+    "description": "",
+    "main": "main.js",
+    "bin": {
+        "zk-cli": "main.js"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/hailongz/ik.git"
+    },
+    "author": "hailongz@qq.com",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/hailongz/ik/issues"
+    },
+    "homepage": "https://github.com/hailongz/ik#readme",
+    "dependencies": {
+        "@babel/parser": "^7.4.2",
+        "@babel/types": "^7.4.0",
+        "commander": "^5.1.0",
+        "yaml": "^1.9.2",
+        "babel-core": "^6.26.3",
+        "babel-plugin-transform-es2015-destructuring": "^6.23.0",
+        "babel-plugin-transform-es2015-for-of": "^6.23.0",
+        "babel-plugin-transform-object-rest-spread": "^6.26.0",
+        "babel-preset-es2015": "^6.24.1",
+        "babel-preset-es2016": "^6.24.1",
+        "babel-preset-es2017": "^6.24.1",
+        "babel-preset-stage-2": "^6.24.1"
+    }
+}
