@@ -14,8 +14,8 @@ export class GetStore extends Logic {
                         vs.push(new Promise<any>((resolve: () => void) => {
                             wx.getStorage({
                                 key: sKey,
-                                success: function (v: any) {
-                                    ctx.setWithKeys(keys, v);
+                                success: function (res: any) {
+                                    ctx.setWithKeys(keys, res.data);
                                     resolve();
                                 },
                                 fail: function () {

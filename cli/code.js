@@ -157,7 +157,7 @@ class Code {
         let idx = 0;
         let code = [];
         let keys = this.keys;
-        let keySet = {};
+        let keySet = { 'undefined': true, 'null': true, 'true': true, 'false': true };
         source.replace(/{{([^\{\}]*?)}}/g, (text, v, index) => {
             // console.info("[CODE]", v);
             var e;

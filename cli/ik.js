@@ -49,7 +49,7 @@ function mkdirs(p) {
 var rawKeys = {
     "info": true
 };
-function parseArg(arg, vs) {
+function parseArg(arg, vs, basedir) {
     switch (typeof arg) {
         case 'string':
             let v = arg.trim();
@@ -80,7 +80,7 @@ function parseArg(arg, vs) {
                     if (i != 0) {
                         vs.push(",");
                     }
-                    parseArg(arg[i], vs);
+                    parseArg(arg[i], vs, basedir);
                 }
                 vs.push("]");
             }
@@ -93,7 +93,7 @@ function parseArg(arg, vs) {
                     }
                     vs.push(JSON.stringify(key));
                     vs.push(":");
-                    parseArg(arg[key], vs);
+                    parseArg(arg[key], vs, basedir);
                     i++;
                 }
                 vs.push("}");
@@ -105,8 +105,8 @@ function parseArg(arg, vs) {
     }
 }
 exports.parseArg = parseArg;
-function parseThenItem(item, vs, prefix) {
-    if (typeof item == 'object') {
+function parseThenItem(item, vs, prefix, basedir) {
+    if (typeof item == 'object' && item != null) {
         if (item.name) {
             vs.push('ik.');
             vs.push(item.name);
@@ -118,26 +118,79 @@ function parseThenItem(item, vs, prefix) {
                         if (i != 0) {
                             vs.push(",");
                         }
-                        parseArg(item.args[i], vs);
+                        parseArg(item.args[i], vs, basedir);
                     }
                 }
                 else {
-                    parseArg(item.args, vs);
+                    parseArg(item.args, vs, basedir);
                 }
             }
             vs.push(")");
             vs.push("\n");
+            if (item.logic) {
+                parseLogic(item.logic, vs, prefix + "  ", basedir);
+            }
             if (item.then) {
                 vs.push(prefix + "  ");
-                parseThen(item.then, vs, prefix + "  ");
+                parseThen(item.then, vs, prefix + "  ", basedir);
             }
             return;
         }
         else if (item.ref) {
-            vs.push("ik.logic(function(ctx){ return ik.exec(exports," + JSON.stringify(item.ref) + ",ctx); },ik.Context)\n");
+            let i = item.ref.indexOf(":");
+            if (i > 0) {
+                let p = item.ref.substr(0, i);
+                let n = item.ref.substr(i + 1);
+                if (/^\//i.test(p)) {
+                    p = basedir + '..' + p;
+                }
+                vs.push("ik.logic(function(ctx){ return ik.exec(require(" + JSON.stringify(p) + ")," + JSON.stringify(n) + ",ctx); },ik.Context)\n");
+            }
+            else {
+                vs.push("ik.logic(function(ctx){ return ik.exec(exports," + JSON.stringify(item.ref) + ",ctx); },ik.Context)\n");
+            }
+            if (item.logic) {
+                parseLogic(item.logic, vs, prefix + "  ", basedir);
+            }
             if (item.then) {
                 vs.push(prefix + "  ");
-                parseThen(item.then, vs, prefix + "  ");
+                parseThen(item.then, vs, prefix + "  ", basedir);
+            }
+            return;
+        }
+        else if (item.func) {
+            let i = item.func.indexOf(":");
+            if (i > 0) {
+                let p = item.func.substr(0, i);
+                let n = item.func.substr(i + 1);
+                if (/^\//i.test(p)) {
+                    p = basedir + '..' + p;
+                }
+                vs.push("ik.logic(require(" + JSON.stringify(p) + ")." + n);
+            }
+            else {
+                vs.push("ik.logic(require(" + JSON.stringify(item.func) + ")");
+            }
+            if (typeof item.args == 'object') {
+                if (item.args instanceof Array) {
+                    let n = item.args.length;
+                    for (let i = 0; i < n; i++) {
+                        vs.push(",");
+                        parseArg(item.args[i], vs, basedir);
+                    }
+                }
+                else {
+                    parseArg(item.args, vs, basedir);
+                }
+            }
+            vs.push(")");
+            vs.push("\n");
+            if (item.logic) {
+                parseLogic(item.logic, vs, prefix + "  ", basedir);
+            }
+            if (item.then) {
+                vs.push(prefix + "  ");
+                parseThen(item.then, vs, prefix + "  ", basedir);
             }
             return;
         }
@@ -145,7 +198,7 @@ function parseThenItem(item, vs, prefix) {
     vs.push('undefined\n');
 }
 exports.parseThenItem = parseThenItem;
-function parseThen(then, vs, prefix) {
+function parseThen(then, vs, prefix, basedir) {
     if (typeof then == 'object') {
         if (then instanceof Array) {
             vs.push(".then(\n");
@@ -156,24 +209,47 @@ function parseThen(then, vs, prefix) {
                 if (i != 0) {
                     vs.push(",");
                 }
-                parseThenItem(th, vs, prefix + "  ");
+                parseThenItem(th, vs, prefix + "  ", basedir);
             }
             if (n > 0) {
                 vs.push(prefix);
             }
             vs.push(")\n");
         }
-        else if (then.name || then.ref) {
+        else if (then != null && (then.name || then.ref || then.func)) {
             vs.push(".then(\n");
             vs.push(prefix + "  ");
-            parseThenItem(then, vs, prefix + "  ");
+            parseThenItem(then, vs, prefix + "  ", basedir);
             vs.push(prefix);
             vs.push(")\n");
         }
     }
 }
 exports.parseThen = parseThen;
-function parseLogic(key, object, vs) {
+function parseLogic(logic, vs, prefix, basedir) {
+    if (typeof logic == 'object') {
+        if (logic instanceof Array) {
+            for (let th of logic) {
+                vs.push(prefix);
+                vs.push(".add(\n");
+                vs.push(prefix + "  ");
+                parseThenItem(th, vs, prefix + "  ", basedir);
+                vs.push(prefix);
+                vs.push(")\n");
+            }
+        }
+        else if (logic != null && (logic.name || logic.ref || logic.func)) {
+            vs.push(prefix);
+            vs.push(".add(\n");
+            vs.push(prefix + "  ");
+            parseThenItem(logic, vs, prefix + "  ", basedir);
+            vs.push(prefix);
+            vs.push(")\n");
+        }
+    }
+}
+exports.parseLogic = parseLogic;
+function parseApp(key, object, vs, basedir) {
     if (object.title) {
         vs.push("/**\n * ");
         vs.push(object.title);
@@ -182,12 +258,15 @@ function parseLogic(key, object, vs) {
     vs.push("exports.");
     vs.push(key);
     vs.push(" = ik.app()\n");
+    if (object.logic) {
+        parseLogic(object.logic, vs, "\t\t", basedir);
+    }
     if (object.then) {
         vs.push("\t\t");
-        parseThen(object.then, vs, "\t\t");
+        parseThen(object.then, vs, "\t\t", basedir);
     }
 }
-exports.parseLogic = parseLogic;
+exports.parseApp = parseApp;
 function parse(object, basedir) {
     if (basedir) {
         basedir += '/';
@@ -203,7 +282,7 @@ function parse(object, basedir) {
         for (let key in object) {
             let v = object[key];
             if (typeof v == 'object' && !rawKeys[key]) {
-                parseLogic(key, v, vs);
+                parseApp(key, v, vs, basedir);
             }
             else {
                 vs.push("exports.");

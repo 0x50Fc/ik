@@ -18,12 +18,22 @@ export class Logic {
         return this;
     }
 
+    add(logic: Logic): Logic {
+        return this;
+    }
+
+    protected call(ctx: Context, ...args: any[]): any {
+        if (typeof this._exec == 'function') {
+            return this._exec(...args);
+        }
+    }
+
     exec(ctx: Context = new Context()): Promise<any> {
         if (this._onfulfilled || this._onrejected) {
             return new Promise((resolve: (v: any) => void, reject: (reason: any) => void) => {
                 let vs: any[] = ctx.evaluate(this._args);
                 try {
-                    let r = this._exec(...vs);
+                    let r = this.call(ctx, ...vs);
                     if (r instanceof Promise) {
                         r.then((v: any) => {
                             if (this._onfulfilled) {
@@ -65,7 +75,7 @@ export class Logic {
         }
         let vs: any[] = ctx.evaluate(this._args);
         try {
-            let r = this._exec(...vs);
+            let r = this.call(ctx, ...vs);
             if (r instanceof Promise) {
                 return r;
             }
@@ -74,6 +84,129 @@ export class Logic {
             return Promise.reject(reason);
         }
     }
+}
+
+export class Mixed extends Logic {
+
+    protected _logics: Logic[] = [];
+
+    add(logic: Logic): Logic {
+        this._logics.push(logic);
+        return this;
+    }
+
+    call(ctx: Context, ...args: any[]): any {
+
+        let vs: Promise<any>[] = [];
+
+        for (let v of this._logics) {
+            vs.push(v.exec(ctx));
+        }
+
+        if (vs.length == 0) {
+            return super.call(ctx, ...args);
+        }
+
+        let r = super.call(ctx, ...args);
+
+        if (r instanceof Promise) {
+            vs.push(r);
+        } else {
+            vs.push(Promise.resolve(r))
+        }
+
+        return new Promise((resolve: (v?: any) => void, reject: (reason: any) => void) => {
+            let n = vs.length;
+            let i = 0;
+            let errCount = 0;
+            let reason: any;
+            let done = function (r: any, e?: any) {
+                if (e) {
+                    errCount++;
+                    if (!reason) {
+                        reason = e;
+                    }
+                }
+                if (++i == n) {
+                    if (errCount > 0) {
+                        reject(reason);
+                    } else {
+                        resolve();
+                    }
+                }
+            };
+            for (let v of vs) {
+                v.then(done, done);
+            }
+        });
+    }
+}
+
+export class All extends Logic {
+
+    protected _logics: Logic[] = [];
+
+    add(logic: Logic): Logic {
+        this._logics.push(logic);
+        return this;
+    }
+
+    call(ctx: Context, ...args: any[]): any {
+
+        let vs: Promise<any>[] = [];
+
+        for (let v of this._logics) {
+            vs.push(v.exec(ctx));
+        }
+
+        if (vs.length == 0) {
+            return super.call(ctx, ...args);
+        }
+
+        let r = super.call(ctx, ...args);
+
+        if (r instanceof Promise) {
+            vs.push(r);
+        } else {
+            vs.push(Promise.resolve(r))
+        }
+
+        return Promise.all(vs);
+    }
+}
+
+export class Race extends Logic {
+
+    protected _logics: Logic[] = [];
+
+    add(logic: Logic): Logic {
+        this._logics.push(logic);
+        return this;
+    }
+
+    call(ctx: Context, ...args: any[]): any {
+
+        let vs: Promise<any>[] = [];
+
+        for (let v of this._logics) {
+            vs.push(v.exec(ctx));
+        }
+
+        if (vs.length == 0) {
+            return super.call(ctx, ...args);
+        }
+
+        let r = super.call(ctx, ...args);
+
+        if (r instanceof Promise) {
+            vs.push(r);
+        } else {
+            vs.push(Promise.resolve(r))
+        }
+
+        return Promise.all(vs);
+    }
+    
 }
 
 export interface Options {
@@ -96,7 +229,7 @@ export interface Output {
     [key: string]: any
 }
 
-export class App extends Logic {
+export class App extends Mixed {
 
     constructor() {
         super(() => { });
@@ -109,7 +242,7 @@ export class App extends Logic {
         let ctx = new Context();
         ctx.set('input', input);
         ctx.set('output', {});
-        ctx.set('var', {});
+        ctx.set('self', {});
         return new Promise<Output>((resolve: (v: Output) => void, reject: (reason: any) => void) => {
             super.exec(ctx).then(() => {
                 resolve(ctx.get('output'));

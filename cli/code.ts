@@ -173,7 +173,7 @@ export class Code {
         let idx = 0;
         let code: string[] = [];
         let keys = this.keys;
-        let keySet: KeySet = {};
+        let keySet: KeySet = { 'undefined': true, 'null': true, 'true': true, 'false': true };
 
         source.replace(/{{([^\{\}]*?)}}/g, (text: string, v: string, index: number): string => {
 

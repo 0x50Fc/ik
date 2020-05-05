@@ -65,7 +65,7 @@ var rawKeys: any = {
     "info": true
 };
 
-export function parseArg(arg: any, vs: string[]): void {
+export function parseArg(arg: any, vs: string[], basedir: string): void {
     switch (typeof arg) {
         case 'string':
             let v = arg.trim();
@@ -95,7 +95,7 @@ export function parseArg(arg: any, vs: string[]): void {
                     if (i != 0) {
                         vs.push(",");
                     }
-                    parseArg(arg[i], vs);
+                    parseArg(arg[i], vs, basedir);
                 }
                 vs.push("]")
             } else {
@@ -107,7 +107,7 @@ export function parseArg(arg: any, vs: string[]): void {
                     }
                     vs.push(JSON.stringify(key));
                     vs.push(":");
-                    parseArg(arg[key], vs);
+                    parseArg(arg[key], vs, basedir);
                     i++
                 }
                 vs.push("}");
@@ -119,9 +119,9 @@ export function parseArg(arg: any, vs: string[]): void {
     }
 }
 
-export function parseThenItem(item: any, vs: string[], prefix: string): void {
+export function parseThenItem(item: any, vs: string[], prefix: string, basedir: string): void {
 
-    if (typeof item == 'object') {
+    if (typeof item == 'object' && item != null) {
         if (item.name) {
             vs.push('ik.');
             vs.push(item.name);
@@ -133,24 +133,73 @@ export function parseThenItem(item: any, vs: string[], prefix: string): void {
                         if (i != 0) {
                             vs.push(",");
                         }
-                        parseArg(item.args[i], vs);
+                        parseArg(item.args[i], vs, basedir);
                     }
                 } else {
-                    parseArg(item.args, vs);
+                    parseArg(item.args, vs, basedir);
                 }
             }
             vs.push(")");
             vs.push("\n");
+            if (item.logic) {
+                parseLogic(item.logic, vs, prefix + "  ", basedir);
+            }
             if (item.then) {
                 vs.push(prefix + "  ")
-                parseThen(item.then, vs, prefix + "  ");
+                parseThen(item.then, vs, prefix + "  ", basedir);
             }
             return;
         } else if (item.ref) {
-            vs.push("ik.logic(function(ctx){ return ik.exec(exports," + JSON.stringify(item.ref) + ",ctx); },ik.Context)\n");
+            let i = item.ref.indexOf(":");
+            if (i > 0) {
+                let p = item.ref.substr(0, i);
+                let n = item.ref.substr(i + 1);
+                if (/^\//i.test(p)) {
+                    p = basedir + '..' + p
+                }
+                vs.push("ik.logic(function(ctx){ return ik.exec(require(" + JSON.stringify(p) + ")," + JSON.stringify(n) + ",ctx); },ik.Context)\n");
+            } else {
+                vs.push("ik.logic(function(ctx){ return ik.exec(exports," + JSON.stringify(item.ref) + ",ctx); },ik.Context)\n");
+            }
+            if (item.logic) {
+                parseLogic(item.logic, vs, prefix + "  ", basedir);
+            }
             if (item.then) {
                 vs.push(prefix + "  ")
-                parseThen(item.then, vs, prefix + "  ");
+                parseThen(item.then, vs, prefix + "  ", basedir);
+            }
+            return;
+        } else if (item.func) {
+            let i = item.func.indexOf(":");
+            if (i > 0) {
+                let p = item.func.substr(0, i);
+                let n = item.func.substr(i + 1);
+                if (/^\//i.test(p)) {
+                    p = basedir + '..' + p
+                }
+                vs.push("ik.logic(require(" + JSON.stringify(p) + ")." + n);
+            } else {
+                vs.push("ik.logic(require(" + JSON.stringify(item.func) + ")");
+            }
+            if (typeof item.args == 'object') {
+                if (item.args instanceof Array) {
+                    let n = item.args.length;
+                    for (let i = 0; i < n; i++) {
+                        vs.push(",");
+                        parseArg(item.args[i], vs, basedir);
+                    }
+                } else {
+                    parseArg(item.args, vs, basedir);
+                }
+            }
+            vs.push(")");
+            vs.push("\n");
+            if (item.logic) {
+                parseLogic(item.logic, vs, prefix + "  ", basedir);
+            }
+            if (item.then) {
+                vs.push(prefix + "  ")
+                parseThen(item.then, vs, prefix + "  ", basedir);
             }
             return;
         }
@@ -158,7 +207,7 @@ export function parseThenItem(item: any, vs: string[], prefix: string): void {
     vs.push('undefined\n');
 }
 
-export function parseThen(then: any, vs: string[], prefix: string): void {
+export function parseThen(then: any, vs: string[], prefix: string, basedir: string): void {
     if (typeof then == 'object') {
         if (then instanceof Array) {
             vs.push(".then(\n");
@@ -169,23 +218,45 @@ export function parseThen(then: any, vs: string[], prefix: string): void {
                 if (i != 0) {
                     vs.push(",");
                 }
-                parseThenItem(th, vs, prefix + "  ");
+                parseThenItem(th, vs, prefix + "  ", basedir);
             }
             if (n > 0) {
                 vs.push(prefix);
             }
             vs.push(")\n");
-        } else if (then.name || then.ref) {
+        } else if (then != null && (then.name || then.ref || then.func)) {
             vs.push(".then(\n");
             vs.push(prefix + "  ");
-            parseThenItem(then, vs, prefix + "  ");
+            parseThenItem(then, vs, prefix + "  ", basedir);
             vs.push(prefix);
             vs.push(")\n");
         }
     }
 }
 
-export function parseLogic(key: string, object: any, vs: string[]): void {
+export function parseLogic(logic: any, vs: string[], prefix: string, basedir: string): void {
+    if (typeof logic == 'object') {
+        if (logic instanceof Array) {
+            for (let th of logic) {
+                vs.push(prefix);
+                vs.push(".add(\n");
+                vs.push(prefix + "  ");
+                parseThenItem(th, vs, prefix + "  ", basedir);
+                vs.push(prefix);
+                vs.push(")\n");
+            }
+        } else if (logic != null && (logic.name || logic.ref || logic.func)) {
+            vs.push(prefix);
+            vs.push(".add(\n");
+            vs.push(prefix + "  ");
+            parseThenItem(logic, vs, prefix + "  ", basedir);
+            vs.push(prefix);
+            vs.push(")\n");
+        }
+    }
+}
+
+export function parseApp(key: string, object: any, vs: string[], basedir: string): void {
     if (object.title) {
         vs.push("/**\n * ");
         vs.push(object.title);
@@ -194,9 +265,12 @@ export function parseLogic(key: string, object: any, vs: string[]): void {
     vs.push("exports.")
     vs.push(key)
     vs.push(" = ik.app()\n")
+    if (object.logic) {
+        parseLogic(object.logic, vs, "\t\t", basedir);
+    }
     if (object.then) {
         vs.push("\t\t");
-        parseThen(object.then, vs, "\t\t");
+        parseThen(object.then, vs, "\t\t", basedir);
     }
 }
 
@@ -217,7 +291,7 @@ export function parse(object: any, basedir: string): string {
         for (let key in object) {
             let v = object[key];
             if (typeof v == 'object' && !rawKeys[key]) {
-                parseLogic(key, v, vs);
+                parseApp(key, v, vs, basedir);
             } else {
                 vs.push("exports.");
                 vs.push(key);

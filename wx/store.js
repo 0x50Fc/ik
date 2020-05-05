@@ -28,8 +28,8 @@ var GetStore = (function (_super) {
                         vs.push(new Promise(function (resolve) {
                             wx.getStorage({
                                 key: sKey,
-                                success: function (v) {
-                                    ctx.setWithKeys(keys, v);
+                                success: function (res) {
+                                    ctx.setWithKeys(keys, res.data);
                                     resolve();
                                 },
                                 fail: function () {

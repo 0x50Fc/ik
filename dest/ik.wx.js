@@ -161,6 +161,18 @@ var Logic = (function () {
         this._onrejected = onrejected;
         return this;
     };
+    Logic.prototype.add = function (logic) {
+        return this;
+    };
+    Logic.prototype.call = function (ctx) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        if (typeof this._exec == 'function') {
+            return this._exec.apply(this, args);
+        }
+    };
     Logic.prototype.exec = function (ctx) {
         var _this = this;
         if (ctx === void 0) { ctx = new Context_1.Context(); }
@@ -168,7 +180,7 @@ var Logic = (function () {
             return new Promise(function (resolve, reject) {
                 var vs = ctx.evaluate(_this._args);
                 try {
-                    var r = _this._exec.apply(_this, vs);
+                    var r = _this.call.apply(_this, [ctx].concat(vs));
                     if (r instanceof Promise) {
                         r.then(function (v) {
                             if (_this._onfulfilled) {
@@ -215,7 +227,7 @@ var Logic = (function () {
         }
         var vs = ctx.evaluate(this._args);
         try {
-            var r = this._exec.apply(this, vs);
+            var r = this.call.apply(this, [ctx].concat(vs));
             if (r instanceof Promise) {
                 return r;
             }
@@ -228,6 +240,139 @@ var Logic = (function () {
     return Logic;
 }());
 exports.Logic = Logic;
+var Mixed = (function (_super) {
+    __extends(Mixed, _super);
+    function Mixed() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this._logics = [];
+        return _this;
+    }
+    Mixed.prototype.add = function (logic) {
+        this._logics.push(logic);
+        return this;
+    };
+    Mixed.prototype.call = function (ctx) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        var vs = [];
+        for (var _a = 0, _b = this._logics; _a < _b.length; _a++) {
+            var v = _b[_a];
+            vs.push(v.exec(ctx));
+        }
+        if (vs.length == 0) {
+            return _super.prototype.call.apply(this, [ctx].concat(args));
+        }
+        var r = _super.prototype.call.apply(this, [ctx].concat(args));
+        if (r instanceof Promise) {
+            vs.push(r);
+        }
+        else {
+            vs.push(Promise.resolve(r));
+        }
+        return new Promise(function (resolve, reject) {
+            var n = vs.length;
+            var i = 0;
+            var errCount = 0;
+            var reason;
+            var done = function (r, e) {
+                if (e) {
+                    errCount++;
+                    if (!reason) {
+                        reason = e;
+                    }
+                }
+                if (++i == n) {
+                    if (errCount > 0) {
+                        reject(reason);
+                    }
+                    else {
+                        resolve();
+                    }
+                }
+            };
+            for (var _i = 0, vs_1 = vs; _i < vs_1.length; _i++) {
+                var v = vs_1[_i];
+                v.then(done, done);
+            }
+        });
+    };
+    return Mixed;
+}(Logic));
+exports.Mixed = Mixed;
+var All = (function (_super) {
+    __extends(All, _super);
+    function All() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this._logics = [];
+        return _this;
+    }
+    All.prototype.add = function (logic) {
+        this._logics.push(logic);
+        return this;
+    };
+    All.prototype.call = function (ctx) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        var vs = [];
+        for (var _a = 0, _b = this._logics; _a < _b.length; _a++) {
+            var v = _b[_a];
+            vs.push(v.exec(ctx));
+        }
+        if (vs.length == 0) {
+            return _super.prototype.call.apply(this, [ctx].concat(args));
+        }
+        var r = _super.prototype.call.apply(this, [ctx].concat(args));
+        if (r instanceof Promise) {
+            vs.push(r);
+        }
+        else {
+            vs.push(Promise.resolve(r));
+        }
+        return Promise.all(vs);
+    };
+    return All;
+}(Logic));
+exports.All = All;
+var Race = (function (_super) {
+    __extends(Race, _super);
+    function Race() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this._logics = [];
+        return _this;
+    }
+    Race.prototype.add = function (logic) {
+        this._logics.push(logic);
+        return this;
+    };
+    Race.prototype.call = function (ctx) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        var vs = [];
+        for (var _a = 0, _b = this._logics; _a < _b.length; _a++) {
+            var v = _b[_a];
+            vs.push(v.exec(ctx));
+        }
+        if (vs.length == 0) {
+            return _super.prototype.call.apply(this, [ctx].concat(args));
+        }
+        var r = _super.prototype.call.apply(this, [ctx].concat(args));
+        if (r instanceof Promise) {
+            vs.push(r);
+        }
+        else {
+            vs.push(Promise.resolve(r));
+        }
+        return Promise.all(vs);
+    };
+    return Race;
+}(Logic));
+exports.Race = Race;
 var Set = (function (_super) {
     __extends(Set, _super);
     function Set(options) {
@@ -254,7 +399,7 @@ var App = (function (_super) {
         var ctx = new Context_1.Context();
         ctx.set('input', input);
         ctx.set('output', {});
-        ctx.set('var', {});
+        ctx.set('self', {});
         return new Promise(function (resolve, reject) {
             _super.prototype.exec.call(_this, ctx).then(function () {
                 resolve(ctx.get('output'));
@@ -262,7 +407,7 @@ var App = (function (_super) {
         });
     };
     return App;
-}(Logic));
+}(Mixed));
 exports.App = App;
 
 },{"./Context":1}],3:[function(require,module,exports){
@@ -277,6 +422,18 @@ function set(object) {
     return new Logic_1.Set(object);
 }
 exports.set = set;
+function race(object) {
+    return new Logic_1.Race(object);
+}
+exports.race = race;
+function mixed(object) {
+    return new Logic_1.Mixed(object);
+}
+exports.mixed = mixed;
+function all(object) {
+    return new Logic_1.All(object);
+}
+exports.all = all;
 function logic(exec) {
     var args = [];
     for (var _i = 1; _i < arguments.length; _i++) {
@@ -285,8 +442,26 @@ function logic(exec) {
     return new (Logic_1.Logic.bind.apply(Logic_1.Logic, [void 0, exec].concat(args)))();
 }
 exports.logic = logic;
+function If(v) {
+    return new Logic_1.Logic(function (v) {
+        if (v) {
+            return Promise.resolve(v);
+        }
+        return Promise.reject('If');
+    }, v);
+}
+exports.If = If;
+function Throw(errmsg) {
+    return new Logic_1.Logic(function (errmsg) {
+        return Promise.reject(errmsg);
+    }, errmsg);
+}
+exports.Throw = Throw;
 function exec(object, name, input) {
     var v = object[name];
+    if (v instanceof Promise) {
+        return v;
+    }
     if (v instanceof Logic_1.Logic) {
         return v.exec(input);
     }
@@ -358,8 +533,9 @@ copy(ik || module.exports, require('../core/ik'));
 copy(ik || module.exports, require('./http'));
 copy(ik || module.exports, require('./page'));
 copy(ik || module.exports, require('./store'));
+copy(ik || module.exports, require('./login'));
 copy(ik || module.exports, require('./event'));
-},{"../core/Context":1,"../core/Logic":2,"../core/ik":3,"./event":4,"./http":6,"./page":7,"./store":8}],6:[function(require,module,exports){
+},{"../core/Context":1,"../core/Logic":2,"../core/ik":3,"./event":4,"./http":6,"./login":7,"./page":8,"./store":9}],6:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -408,6 +584,75 @@ function http(options) {
 exports.http = http;
 
 },{"../core/Context":1,"../core/Logic":2}],7:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    }
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var Logic_1 = require("../core/Logic");
+var Context_1 = require("../core/Context");
+var Login = (function (_super) {
+    __extends(Login, _super);
+    function Login() {
+        return _super.call(this, function (ctx) {
+            return new Promise(function (resolve, reject) {
+                wx.login({
+                    success: function (res) {
+                        var c = ctx.pushContext();
+                        c.set("retValue", res.code);
+                        resolve(res.code);
+                    },
+                    fail: function (res) {
+                        reject(res.errMsg);
+                    }
+                });
+            });
+        }, Context_1.Context) || this;
+    }
+    return Login;
+}(Logic_1.Logic));
+exports.Login = Login;
+var GetUserInfo = (function (_super) {
+    __extends(GetUserInfo, _super);
+    function GetUserInfo() {
+        return _super.call(this, function (ctx) {
+            return new Promise(function (resolve, reject) {
+                wx.getUserInfo({
+                    success: function (res) {
+                        var c = ctx.pushContext();
+                        c.set("retValue", res);
+                        resolve(res);
+                    },
+                    fail: function (res) {
+                        reject(res.errMsg);
+                    }
+                });
+            });
+        }, Context_1.Context) || this;
+    }
+    return GetUserInfo;
+}(Logic_1.Logic));
+exports.GetUserInfo = GetUserInfo;
+function login() {
+    return new Login();
+}
+exports.login = login;
+function getUserInfo() {
+    return new GetUserInfo();
+}
+exports.getUserInfo = getUserInfo;
+
+},{"../core/Context":1,"../core/Logic":2}],8:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -511,7 +756,7 @@ function env() {
 }
 exports.env = env;
 
-},{"../core/Context":1,"../core/Logic":2}],8:[function(require,module,exports){
+},{"../core/Context":1,"../core/Logic":2}],9:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -542,8 +787,8 @@ var GetStore = (function (_super) {
                         vs.push(new Promise(function (resolve) {
                             wx.getStorage({
                                 key: sKey,
-                                success: function (v) {
-                                    ctx.setWithKeys(keys, v);
+                                success: function (res) {
+                                    ctx.setWithKeys(keys, res.data);
                                     resolve();
                                 },
                                 fail: function () {

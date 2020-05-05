@@ -10,4 +10,5 @@ copy(ik || module.exports, require('../core/ik'));
 copy(ik || module.exports, require('./http'));
 copy(ik || module.exports, require('./page'));
 copy(ik || module.exports, require('./store'));
+copy(ik || module.exports, require('./login'));
 copy(ik || module.exports, require('./event'));
